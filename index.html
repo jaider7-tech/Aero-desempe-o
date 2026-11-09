@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AeroDesempeño</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* Layout: panel de aviónica oscuro (como el ejemplo del profesor): cabecera, dos columnas de entrada, franja de resultados, gráficas en rejilla, peso y balance, metodología */
+:root{
+  color-scheme: dark;
+  --bg:#0a1220; --panel:#0f1b30; --panel-2:#142440; --line:#22375a; --line-soft:#1a2b48;
+  --fg:#dfe7f4; --muted:#8b9bb7; --accent:#5cc8f2; --accent-deep:#2c7fd0;
+  --ok:#46d48b; --warn:#f2b544; --bad:#ff6b7a; --violet:#b99cff;
+  --font-display:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
+  --font-body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;margin:0}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:14px}
+.brand svg{width:44px;height:44px;flex:none}
+.brand h1{font-size:2rem;font-weight:700;letter-spacing:.01em}
+.brand p{margin:0;color:var(--muted);font-size:.9rem}
+.status{font-family:var(--font-display);font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:.9rem;padding:8px 14px;border:1px solid var(--line);border-radius:6px;background:var(--panel);display:flex;align-items:center;gap:8px}
+.status i{width:9px;height:9px;border-radius:50%;background:var(--ok);display:block}
+.status.warn{color:var(--warn)} .status.warn i{background:var(--warn)}
+.status.ok{color:var(--ok)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.panel.hl{border-color:var(--accent-deep);box-shadow:0 0 0 1px var(--accent-deep) inset}
+.ph{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.ph h2{font-size:1.25rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:10px}
+.ph h2 svg{width:18px;height:18px}
+.sub{color:var(--muted);font-size:.85rem;margin:0}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:var(--muted);min-width:0}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:8px 10px;width:100%;min-width:0}
+input[type=number]{font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:right}
+textarea{font-family:var(--font-mono);font-size:.85rem;resize:vertical;min-height:62px}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 12px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+button{font-family:var(--font-display);font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:.9rem;border-radius:5px;padding:8px 14px;cursor:pointer;border:1px solid var(--accent-deep);background:var(--accent-deep);color:#fff}
+button.ghost{background:transparent;color:var(--accent)}
+button:hover{filter:brightness(1.12)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:.9rem;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:18px}
+.pill{display:inline-block;font-family:var(--font-display);font-weight:700;letter-spacing:.1em;padding:1px 9px;border-radius:999px;font-size:.8rem;border:1px solid currentColor}
+.c-VFR{color:var(--ok)} .c-MVFR{color:var(--accent)} .c-IFR{color:var(--bad)} .c-LIFR{color:var(--violet)}
+.note{font-size:.8rem;color:var(--muted);margin:0}
+.msg{font-size:.85rem;margin:0}
+.msg.err{color:var(--warn)} .msg.ok{color:var(--ok)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line-soft);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-family:var(--font-display);font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-size:.78rem}
+td{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+td.best{color:var(--ok)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.tile{background:var(--panel-2);border:1px solid var(--line-soft);border-radius:6px;padding:12px 12px 10px;text-align:center;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile .l{font-family:var(--font-display);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:.78rem;color:var(--muted)}
+.tile .v{font-family:var(--font-mono);font-weight:700;font-size:1.55rem;font-variant-numeric:tabular-nums;line-height:1.25}
+.tile .u{font-size:.78rem;color:var(--accent)}
+.tile.bad .v{color:var(--bad)} .tile.warn .v{color:var(--warn)} .tile.good .v{color:var(--ok)}
+.alerts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:.88rem}
+.alerts li{padding:7px 10px;border-radius:5px;border-left:3px solid var(--ok);background:var(--panel-2)}
+.alerts li.w{border-color:var(--warn)} .alerts li.b{border-color:var(--bad)}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:18px}
+.chartbox{position:relative;height:300px;min-width:0}
+.radio{display:flex;gap:14px;flex-wrap:wrap;font-size:.9rem}
+.radio label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.radio input{width:auto}
+.wbgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:18px}
+@media (max-width:900px){.wbgrid{grid-template-columns:1fr}}
+.wbtab input{width:100px;padding:5px 8px}
+.chk{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}
+.chk input{width:auto}
+.method{columns:2 360px;column-gap:28px;font-size:.9rem}
+.method h3{font-size:1.05rem;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:14px 0 4px;break-after:avoid}
+.method p{margin:0 0 8px;max-width:65ch}
+.method code{font-family:var(--font-mono);font-size:.84rem;background:var(--panel-2);padding:1px 5px;border-radius:3px;color:var(--fg)}
+.method a{color:var(--accent)}
+footer{text-align:center;color:var(--muted);font-size:.8rem}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="var(--accent)" d="M44 22.5 28 21.6 19.8 6h-4.6l4.4 15.4-9.4.5-3.6-5.2H3.4l2.4 7.3-2.4 7.3h3.2l3.6-5.2 9.4.5L15.2 42h4.6L28 26.4l16-.9c1.4-.1 1.4-2.9 0-3z"/></svg>
+    <div>
+      <h1>AeroDesempeño</h1>
+      <p>Analizador de desempeño de aeronaves · Proyecto de Ingeniería Aeronáutica</p>
+    </div>
+  </div>
+  <div class="status ok" id="status"><i></i><span id="statusTxt">Análisis completado</span></div>
+</header>
+
+<div class="grid2">
+  <!-- METAR -->
+  <section class="panel">
+    <div class="ph"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8A6 6 0 1 0 6 16.5"/><path d="M6 19h11.5"/></svg>Información METAR</h2></div>
+    <div class="fields">
+      <label class="f">Aeropuerto (código OACI)
+        <select id="apt"></select>
+      </label>
+      <label class="f">Elevación del aeródromo [m]
+        <input type="number" id="elev" step="1">
+      </label>
+    </div>
+    <label class="f">METAR (texto crudo)
+      <textarea id="metarRaw" spellcheck="false"></textarea>
+    </label>
+    <div class="btns">
+      <button id="btnDecode">Decodificar METAR</button>
+      <button class="ghost" id="btnLive">Obtener METAR en vivo</button>
+      <button class="ghost" id="btnSample">Cargar ejemplo</button>
+    </div>
+    <p class="msg" id="metarMsg"></p>
+    <div class="cols">
+      <dl class="kv" id="metarDec"></dl>
+      <dl class="kv" id="atmDec"></dl>
+    </div>
+  </section>
+
+  <!-- AERONAVE -->
+  <section class="panel hl">
+    <div class="ph"><h2><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>Parámetros de la aeronave</h2></div>
+    <label class="f">Seleccionar aeronave
+      <select id="acSel"></select>
+    </label>
+    <div class="fields">
+      <label class="f">Masa [kg]<input type="number" id="mass" step="100"></label>
+      <label class="f">Área alar S [m²]<input type="number" id="S" step="0.1"></label>
+      <label class="f">Velocidad V (TAS) [m/s]<input type="number" id="V" step="1"></label>
+      <label class="f">CD₀<input type="number" id="cd0" step="0.001"></label>
+      <label class="f">Eficiencia de Oswald e<input type="number" id="e" step="0.01"></label>
+      <label class="f">Alargamiento AR<input type="number" id="AR" step="0.1"></label>
+      <label class="f">CL máx limpio<input type="number" id="clmax" step="0.05"></label>
+      <label class="f">CL máx despegue<input type="number" id="clmaxTO" step="0.05"></label>
+      <label class="f">CL máx aterrizaje<input type="number" id="clmaxL" step="0.05"></label>
+      <label class="f" id="pwrLbl">Empuje por motor [kN]<input type="number" id="pwr" step="1"></label>
+    </div>
+    <label class="chk"><input type="checkbox" id="sync" checked> Usar el peso de despegue calculado en Peso y Balance</label>
+    <dl class="kv" id="acInfo"></dl>
+  </section>
+</div>
+
+<div class="grid2">
+  <!-- AEROPUERTO -->
+  <section class="panel">
+    <div class="ph"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M7 22h10M9 6h6M8 11h8"/></svg>Información del aeropuerto</h2></div>
+    <dl class="kv" id="aptInfo"></dl>
+    <div class="tablewrap"><table id="rwyTab"></table></div>
+    <p class="note">Componentes de viento calculados con la dirección del METAR (verdadera) frente al rumbo nominal de pista (designador × 10°, magnético). Diferencia de variación magnética ≈ 8° W en Colombia, no corregida.</p>
+  </section>
+
+  <!-- CONDICIÓN + ALERTAS -->
+  <section class="panel">
+    <div class="ph"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Condición de análisis</h2></div>
+    <div class="radio">
+      <label><input type="radio" name="mode" value="apt" checked> Aeropuerto (METAR)</label>
+      <label><input type="radio" name="mode" value="isa"> Altitud ISA</label>
+    </div>
+    <div class="fields">
+      <label class="f">Altitud de presión [ft]<input type="number" id="alt" value="37000" step="500"></label>
+      <label class="f">Desviación ISA [°C]<input type="number" id="dT" value="0" step="1"></label>
+    </div>
+    <div class="btns">
+      <button class="ghost" id="btnVmd">V = V(L/D)máx</button>
+      <button class="ghost" id="btnVcr">V = crucero</button>
+      <button class="ghost" id="btnVto">V = 1,3·Vs</button>
+    </div>
+    <ul class="alerts" id="alerts"></ul>
+  </section>
+</div>
+
+<!-- RESULTADOS -->
+<section class="panel">
+  <div class="ph"><h2><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 20h3V10H4zm6.5 0h3V4h-3zM17 20h3v-7h-3z"/></svg>Resultados del análisis</h2><p class="sub" id="resCond"></p></div>
+  <div class="tiles" id="tiles"></div>
+</section>
+
+<!-- GRAFICAS -->
+<section class="panel">
+  <div class="ph"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M6 15c3-8 7-8 14-10"/></svg>Gráficas de rendimiento</h2><p class="sub">Peso y atmósfera de la condición actual</p></div>
+  <div class="charts">
+    <div><h3 class="sub">Empuje requerido y disponible vs velocidad</h3><div class="chartbox"><canvas id="chT"></canvas></div></div>
+    <div><h3 class="sub">Potencia requerida y disponible vs velocidad</h3><div class="chartbox"><canvas id="chP"></canvas></div></div>
+    <div><h3 class="sub">Régimen de ascenso vs velocidad</h3><div class="chartbox"><canvas id="chR"></canvas></div></div>
+    <div><h3 class="sub">Polar de resistencia CL–CD</h3><div class="chartbox"><canvas id="chPol"></canvas></div></div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="ph"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 20h12M12 4v16M5 8h14l-3 6h-8z"/></svg>Rendimiento según peso</h2><p class="sub">Atmósfera del aeropuerto seleccionado</p></div>
+  <div class="charts">
+    <div><h3 class="sub">Distancia de despegue y aterrizaje requerida vs masa</h3><div class="chartbox"><canvas id="chTO"></canvas></div></div>
+    <div><h3 class="sub">Velocidad de pérdida (KEAS) vs masa</h3><div class="chartbox"><canvas id="chVs"></canvas></div></div>
+  </div>
+</section>
+
+<!-- PESO Y BALANCE -->
+<section class="panel">
+  <div class="ph"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M4 7h16M7 7l-3 7a3 3 0 0 0 6 0zm10 0-3 7a3 3 0 0 0 6 0z"/></svg>Peso y balance</h2><p class="sub" id="wbSub"></p></div>
+  <div class="wbgrid">
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+      <div class="fields">
+        <label class="f">Masa por pasajero [kg]<input type="number" id="paxMass" value="84" step="1"></label>
+        <label class="f">Combustible de viaje [kg]<input type="number" id="trip" step="100"></label>
+      </div>
+      <div class="tablewrap"><table class="wbtab" id="wbTab"></table></div>
+      <div class="tablewrap"><table id="wbRes"></table></div>
+    </div>
+    <div><div class="chartbox" style="height:380px"><canvas id="chWB"></canvas></div>
+      <p class="note" id="wbNote"></p></div>
+  </div>
+</section>
+
+<!-- METODOLOGIA -->
+<section class="panel">
+  <div class="ph"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h6"/></svg>Metodología y supuestos</h2></div>
+  <div class="method">
+    <h3>Atmósfera</h3>
+    <p>Presión en la estación desde el QNH con la atmósfera estándar OACI: <code>p = QNH·(1 − 2,25577·10⁻⁵·h)^5,25588</code>. Densidad con la temperatura del METAR y corrección por humedad (temperatura virtual a partir del punto de rocío, fórmula de Magnus): <code>ρ = p / (R·Tv)</code>, R = 287,05 J/kg·K.</p>
+    <p>Altitud de presión: <code>PA = 145 366·(1 − (p/101 325)^0,190284)</code> ft. Altitud de densidad: <code>DA = 145 442·(1 − (ρ/1,225)^0,234969)</code> ft.</p>
+    <h3>Aerodinámica</h3>
+    <p><code>CL = 2W / (ρ·V²·S)</code>, polar parabólica <code>CD = CD₀ + CL²/(π·e·AR)</code>. Empuje requerido en vuelo recto y nivelado <code>T = D = ½ρV²·S·CD</code>. <code>(L/D)máx = 1/(2√(CD₀·k))</code> y <code>V(L/D)máx = √(2W/(ρS))·(k/CD₀)^¼</code>. Velocidad de pérdida <code>Vs = √(2W/(ρ·S·CLmáx))</code>; KEAS = TAS·√σ.</p>
+    <h3>Planta motriz</h3>
+    <p>Reactores: <code>Ta = n·T₀·σ^0,8·(1 − 0,3M)</code> (aproximación de pérdida con altitud y Mach). Turbohélice: <code>P = n·P₀·σ^0,6</code>; motor de pistón: <code>P = n·P₀·(1,132σ − 0,132)</code> (Gagg‑Ferrar). Empuje de hélice <code>ηP/V</code>, limitado al empuje estático por teoría de disco actuador.</p>
+    <h3>Ascenso y alcance</h3>
+    <p><code>RC = (Ta·V − D·V) / W</code>. Alcance de Breguet en crucero ISA: reactores <code>R = (V/cₜ)·(L/D)·ln(Wi/Wf)</code>; hélice <code>R = (η/c)·(L/D)·ln(Wi/Wf)</code>, consumiendo el 90 % del combustible cargado (10 % de reserva).</p>
+    <h3>Despegue y aterrizaje</h3>
+    <p>Método de Anderson: carrera de despegue <code>s = 1,44·W² / (g·ρ·S·CLmáx,TO·[T − D − μ(W − L)]₀,₇VLO)</code> con VLO = 1,2·Vs,TO, μ = 0,02, CL de rodaje óptimo <code>π·e·AR·μ/2</code>. Tramo aéreo hasta 35 ft (reactores) o 50 ft (hélice) con radio de transición <code>6,96·Vs²/g</code>. TODR = 1,15 × (carrera + tramo aéreo).</p>
+    <p>Aterrizaje: carrera <code>s = 1,69·W² / (g·ρ·S·CLmáx,L·[D + μᵣ·W]₀,₇VTD)</code>, VTD = 1,15·Vs, μᵣ = 0,4, sin reversa, con tramo aéreo desde 50 ft en senda de 3°. LDR = distancia total / 0,6 (factor de pista seca).</p>
+    <h3>Peso y balance</h3>
+    <p>CG = Σ(mᵢ·brazoᵢ)/Σmᵢ desde el datum en la nariz. En aviones de transporte se expresa en %MAC: <code>%MAC = (CG − LEMAC)/MAC·100</code>. Las estaciones, el LEMAC y la envolvente de los aviones de transporte son simplificaciones académicas; la del Cessna 172S sigue el POH (categoría normal).</p>
+    <h3>Fuentes de datos</h3>
+    <p>Masas, dimensiones y motores: documentos <em>Aircraft Characteristics for Airport Planning</em> de Airbus, Boeing, Embraer y ATR, y POH del Cessna 172S. Coeficientes CD₀, e y CLmáx: valores típicos de la literatura (Anderson, <em>Aircraft Performance and Design</em>; Raymer; Roskam). Aeropuertos: AIP de cada país. METAR: <a href="https://aviationweather.gov/data/metar/" target="_blank" rel="noopener">aviationweather.gov</a>. Los ejemplos de METAR precargados son representativos, no observaciones reales.</p>
+    <p><strong>Uso académico.</strong> No sustituye el AFM ni el software de rendimiento certificado del operador.</p>
+  </div>
+</section>
+<footer>AeroDesempeño · Ingeniería Aeronáutica · Modelo de cálculo con atmósfera OACI y polar parabólica</footer>
+</div>
+
+<script>
+const g=9.80665, R=287.053, KT=1.943844, FT=3.28084;
+const $=id=>document.getElementById(id);
+const fmt=(v,d=0)=>Number.isFinite(v)?v.toLocaleString('es-CO',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
+
+/* ---------- AERONAVES (datos públicos aproximados) ---------- */
+const AIRCRAFT={
+ A20N:{name:'Airbus A320neo',type:'jet',n:2,T0:120.6,tsfc:0.53,mtow:79000,mlw:67400,mzfw:64300,oew:44300,fuelMax:19000,dens:0.80,S:122.6,b:35.8,cd0:0.022,e:0.80,clmax:1.5,clmaxTO:2.2,clmaxL:2.9,Vcr:230,FL:370,pax:180,L:37.57,mac:4.19,crew:6,holdF:3400,holdA:5000,fuel:12000,engine:'2 × CFM LEAP‑1A26 (120,6 kN)'},
+ B738:{name:'Boeing 737-800',type:'jet',n:2,T0:121.4,tsfc:0.60,mtow:79016,mlw:66361,mzfw:62732,oew:41413,fuelMax:20894,dens:0.80,S:124.6,b:35.79,cd0:0.023,e:0.78,clmax:1.5,clmaxTO:2.1,clmaxL:2.8,Vcr:230,FL:370,pax:189,L:39.5,mac:3.96,crew:6,holdF:3500,holdA:5000,fuel:12000,engine:'2 × CFM56‑7B27 (121,4 kN)'},
+ E295:{name:'Embraer E195-E2',type:'jet',n:2,T0:102.0,tsfc:0.53,mtow:61500,mlw:54000,mzfw:51850,oew:35700,fuelMax:13690,dens:0.80,S:110.0,b:35.12,cd0:0.022,e:0.82,clmax:1.5,clmaxTO:2.1,clmaxL:2.7,Vcr:228,FL:370,pax:146,L:41.5,mac:3.6,crew:5,holdF:2000,holdA:2500,fuel:8000,engine:'2 × PW1900G (≈102 kN)'},
+ AT76:{name:'ATR 72-600',type:'turboprop',n:2,P0:1846,eta:0.80,psfc:0.28,prop:3.93,mtow:23000,mlw:22350,mzfw:21000,oew:13500,fuelMax:5000,dens:0.80,S:61.0,b:27.05,cd0:0.025,e:0.85,clmax:1.6,clmaxTO:2.0,clmaxL:2.6,Vcr:140,FL:170,pax:72,L:27.17,mac:2.3,crew:4,holdF:900,holdA:600,fuel:2500,engine:'2 × PW127M (2 475 shp)'},
+ B788:{name:'Boeing 787-8',type:'jet',n:2,T0:284,tsfc:0.52,mtow:227930,mlw:172365,mzfw:161025,oew:119950,fuelMax:81000,dens:0.80,S:377,b:60.12,cd0:0.018,e:0.82,clmax:1.5,clmaxTO:2.1,clmaxL:2.7,Vcr:252,FL:390,pax:248,L:56.72,mac:7.6,crew:10,holdF:15000,holdA:13000,fuel:50000,engine:'2 × GEnx‑1B / Trent 1000 (≈284 kN)'},
+ C172:{name:'Cessna 172S Skyhawk',type:'piston',n:1,P0:134.2,eta:0.75,psfc:0.26,prop:1.91,mtow:1157,mlw:1157,mzfw:1157,oew:762,fuelMax:144,dens:0.72,S:16.2,b:11.0,cd0:0.031,e:0.75,clmax:1.6,clmaxTO:1.75,clmaxL:2.1,Vcr:58,FL:80,pax:4,engine:'1 × Lycoming IO‑360‑L2A (180 hp)',
+   wb:{mode:'arm',empty:{mass:762,arm:1.029},stations:[
+     {id:'front',name:'Piloto y pasajero delantero',kind:'kg',arm:0.940,max:250,def:170},
+     {id:'rear',name:'Pasajeros traseros',kind:'kg',arm:1.854,max:250,def:0},
+     {id:'bagA',name:'Equipaje área A',kind:'kg',arm:2.413,max:54,def:10},
+     {id:'bagB',name:'Equipaje área B',kind:'kg',arm:3.124,max:23,def:0},
+     {id:'fuel',name:'Combustible (AVGAS)',kind:'fuel',arm:1.219,max:144,def:100}],
+     env:[[0.889,680],[0.889,884.5],[1.041,1156.7],[1.201,1156.7],[1.201,680]],trip:30}}
+};
+function buildWB(ac){
+  if(ac.wb) return ac.wb;
+  const L=ac.L, mac=ac.mac, lemac=0.5*L-0.25*mac, armP=p=>lemac+p/100*mac;
+  const z=Math.ceil(ac.pax/3), zd=Math.round(ac.pax*0.85/3), cab=0.7*L;
+  ac.wb={mode:'mac',lemac,mac,empty:{mass:ac.oew,arm:armP(24)},stations:[
+    {id:'crew',name:'Tripulación (85 kg c/u)',kind:'count',unit:85,arm:0.07*L,max:ac.crew+2,def:ac.crew},
+    {id:'paxA',name:'Pasajeros zona A (delantera)',kind:'pax',arm:0.15*L+cab/6,max:z,def:zd},
+    {id:'paxB',name:'Pasajeros zona B (central)',kind:'pax',arm:0.5*L,max:z,def:zd},
+    {id:'paxC',name:'Pasajeros zona C (trasera)',kind:'pax',arm:0.85*L-cab/6,max:ac.pax-2*z,def:zd},
+    {id:'holdF',name:'Bodega delantera',kind:'kg',arm:0.32*L,max:ac.holdF,def:Math.round(ac.holdF*0.3/10)*10},
+    {id:'holdA',name:'Bodega trasera',kind:'kg',arm:0.68*L,max:ac.holdA,def:Math.round(ac.holdA*0.3/10)*10},
+    {id:'fuel',name:'Combustible (Jet A‑1)',kind:'fuel',arm:armP(30),max:ac.fuelMax,def:ac.fuel}],
+    env:[[14,ac.oew*0.9],[14,ac.mtow*0.8],[18,ac.mtow],[35,ac.mtow],[39,ac.mtow*0.8],[39,ac.oew*0.9]],
+    trip:Math.round(ac.fuel*0.4/100)*100};
+  return ac.wb;
+}
+
+/* ---------- AEROPUERTOS ---------- */
+const AIRPORTS={
+ SKBO:{name:'Aeropuerto Internacional El Dorado',city:'Bogotá, Colombia',elev:2548,rwys:[['14L/32R',3800,45],['14R/32L',3800,45]],metar:'SKBO 092100Z 31008KT 9999 SCT025 BKN080 15/08 A3036 NOSIG'},
+ SKRG:{name:'Aeropuerto Internacional José María Córdova',city:'Rionegro (Medellín), Colombia',elev:2142,rwys:[['18/36',3557,45]],metar:'SKRG 092100Z 35006KT 9999 FEW020 SCT080 18/12 A3034'},
+ SKCL:{name:'Aeropuerto Internacional Alfonso Bonilla Aragón',city:'Palmira (Cali), Colombia',elev:964,rwys:[['01/19',3000,45]],metar:'SKCL 092100Z 34010KT 9999 SCT025 27/18 A2990'},
+ SKCG:{name:'Aeropuerto Internacional Rafael Núñez',city:'Cartagena, Colombia',elev:2,rwys:[['01/19',2600,45]],metar:'SKCG 092100Z 02012KT 9999 FEW020 30/24 A2982'},
+ SKBQ:{name:'Aeropuerto Internacional Ernesto Cortissoz',city:'Barranquilla, Colombia',elev:30,rwys:[['05/23',3000,45]],metar:'SKBQ 092100Z 05015KT 9999 FEW022 31/23 A2981'},
+ SKSP:{name:'Aeropuerto Internacional Gustavo Rojas Pinilla',city:'San Andrés, Colombia',elev:2,rwys:[['06/24',2380,45]],metar:'SKSP 092100Z 07014KT 9999 SCT018 -SHRA 29/24 A2985'},
+ SEQM:{name:'Aeropuerto Internacional Mariscal Sucre',city:'Quito, Ecuador',elev:2400,rwys:[['18/36',4100,45]],metar:'SEQM 092100Z 18008KT 9999 SCT030 BKN100 17/07 Q1026'},
+ MMMX:{name:'Aeropuerto Internacional Benito Juárez',city:'Ciudad de México, México',elev:2230,rwys:[['05L/23R',3952,45],['05R/23L',3900,45]],metar:'MMMX 092105Z 36008KT 10SM SCT025 BKN200 22/05 A3034'},
+ SPJC:{name:'Aeropuerto Internacional Jorge Chávez',city:'Lima, Perú',elev:34,rwys:[['16L/34R',3507,45],['16R/34L',3480,60]],metar:'SPJC 092100Z 20011KT 9999 BKN010 19/15 Q1012'},
+ KMIA:{name:'Miami International Airport',city:'Miami, EE. UU.',elev:2,rwys:[['08L/26R',2621,61],['08R/26L',3202,61],['09/27',3962,46],['12/30',2865,46]],metar:'KMIA 092053Z 09012KT 10SM FEW030 SCT250 29/21 A3002'}
+};
+
+/* ---------- METAR ---------- */
+const WXD={'-':'débil ','+':'fuerte ',VC:'en las proximidades ',MI:'baja ',BC:'bancos de ',PR:'parcial ',DR:'ventisca baja ',BL:'ventisca alta ',SH:'chubascos de ',TS:'tormenta ',FZ:'engelante ',DZ:'llovizna',RA:'lluvia',SN:'nieve',SG:'cinarra',IC:'cristales de hielo',PL:'hielo granulado',GR:'granizo',GS:'granizo pequeño',UP:'precip. desconocida',BR:'neblina',FG:'niebla',FU:'humo',VA:'ceniza volcánica',DU:'polvo',SA:'arena',HZ:'calima',PY:'rocío',PO:'remolinos de polvo',SQ:'turbonada',FC:'tromba',SS:'tempestad de arena',DS:'tempestad de polvo'};
+const COV={FEW:'Pocas',SCT:'Dispersas',BKN:'Fragmentadas',OVC:'Cubierto',VV:'Visibilidad vertical'};
+function decodeWx(s){let out='',m=s.match(/^(\+|-|VC)?(.*)$/);if(m[1])out+=WXD[m[1]];for(let i=0;i<m[2].length;i+=2)out+=(WXD[m[2].substr(i,2)]||m[2].substr(i,2))+' ';return out.trim();}
+function parseMetar(raw){
+  const t=raw.trim().toUpperCase().replace(/=$/,'').split(/\s+/).filter(Boolean);
+  const r={raw:raw.trim(),clouds:[],wx:[]};let i=0;
+  if(t[i]==='METAR'||t[i]==='SPECI')i++;
+  if(/^[A-Z][A-Z0-9]{3}$/.test(t[i]||''))r.icao=t[i++];
+  for(;i<t.length;i++){const s=t[i];let m;
+    if(['NOSIG','TEMPO','BECMG','RMK'].includes(s))break;
+    if(s==='AUTO'||s==='COR')continue;
+    if(m=s.match(/^(\d{2})(\d{2})(\d{2})Z$/)){r.time=`día ${m[1]}, ${m[2]}:${m[3]} UTC`;continue;}
+    if(m=s.match(/^(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?(KT|MPS)$/)){const f=m[4]==='MPS'?KT:1;r.wvrb=m[1]==='VRB';r.wdir=r.wvrb?null:+m[1];r.wspd=Math.round(+m[2]*f);r.gust=m[3]?Math.round(+m[3]*f):null;continue;}
+    if(m=s.match(/^(\d{3})V(\d{3})$/)){r.wvar=[m[1],m[2]];continue;}
+    if(s==='CAVOK'){r.cavok=true;r.vis=10000;continue;}
+    if(m=s.match(/^(\d{4})(NDV)?$/)){r.vis=+m[1]>=9999?10000:+m[1];continue;}
+    if(/SM$/.test(s)){let v=s.replace(/^[PM]/,'').replace('SM','');v=v.includes('/')?v.split('/')[0]/v.split('/')[1]:+v;r.vis=Math.min(10000,Math.round(v*1609));if(s.startsWith('P'))r.vis=10000;continue;}
+    if(m=s.match(/^(FEW|SCT|BKN|OVC|VV)(\d{3}|\/\/\/)(CB|TCU)?$/)){r.clouds.push({cov:m[1],base:m[2]==='///'?null:+m[2]*100,type:m[3]||''});continue;}
+    if(/^(SKC|CLR|NSC|NCD)$/.test(s)){r.nsc=true;continue;}
+    if(m=s.match(/^(M?\d{2})\/(M?\d{2})?$/)){const n=x=>x[0]==='M'?-(+x.slice(1)):+x;r.temp=n(m[1]);r.dew=m[2]?n(m[2]):null;continue;}
+    if(m=s.match(/^Q(\d{4})$/)){r.qnh=+m[1];continue;}
+    if(m=s.match(/^A(\d{4})$/)){r.inhg=+m[1]/100;r.qnh=r.inhg*33.8639;continue;}
+    if(/^R\d{2}/.test(s))continue;
+    if(/^(\+|-|VC)?(MI|BC|PR|DR|BL|SH|TS|FZ)?(DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)*$/.test(s)&&s.length>=2){r.wx.push(s);continue;}
+  }
+  const ceil=r.clouds.filter(c=>['BKN','OVC','VV'].includes(c.cov)&&c.base!=null).map(c=>c.base);
+  r.ceiling=ceil.length?Math.min(...ceil):null;
+  const c=r.ceiling??99999, v=r.vis??10000;
+  r.cat=(c<500||v<1600)?'LIFR':(c<1000||v<4800)?'IFR':(c<=3000||v<=8000)?'MVFR':'VFR';
+  return r;
+}
+
+/* ---------- ATMÓSFERA ---------- */
+function pack(p,T,rho,e){
+  const sigma=rho/1.225;
+  return {p,T,rho,sigma,a:Math.sqrt(1.4*R*T),
+    PA:145366.45*(1-Math.pow(p/101325,0.190284)),
+    DA:145442.16*(1-Math.pow(rho/1.225,0.234969)),e};
+}
+function atmAirport(m,elev){
+  const qnh=m.qnh??1013.25, Tc=m.temp??15, T=Tc+273.15;
+  const p=qnh*100*Math.pow(1-2.25577e-5*elev,5.25588);
+  const e=m.dew!=null?6.112*Math.exp(17.67*m.dew/(m.dew+243.5))*100:0;
+  const es=6.112*Math.exp(17.67*Tc/(Tc+243.5))*100;
+  const Tv=T/(1-0.378*e/p);
+  const o=pack(p,T,p/(R*Tv),e); o.RH=e?e/es*100:null; return o;
+}
+function atmISA(hft,dT){
+  const h=hft/FT; let Ti,p;
+  if(h<=11000){Ti=288.15-0.0065*h;p=101325*Math.pow(Ti/288.15,5.25588);}
+  else{Ti=216.65;p=22632.1*Math.exp(-g*(h-11000)/(R*Ti));}
+  const T=Ti+dT; return pack(p,T,p/(R*T),0);
+}
+
+/* ---------- RENDIMIENTO ---------- */
+function powerAvail(ac,atm){ // W
+  const P=ac.n*ac.P0*1000;
+  return ac.type==='turboprop'?P*Math.pow(atm.sigma,0.6):P*Math.max(0,1.132*atm.sigma-0.132);
+}
+function thrustAvail(ac,atm,V){ // N
+  if(ac.type==='jet'){const M=V/atm.a;return ac.n*ac.T0*1000*Math.pow(atm.sigma,0.8)*Math.max(0.3,1-0.3*M);}
+  const P=powerAvail(ac,atm), A=Math.PI*ac.prop*ac.prop/4;
+  const Tst=0.8*Math.pow(P/ac.n,2/3)*Math.cbrt(2*atm.rho*A)*ac.n;
+  return Math.min(ac.eta*P/Math.max(V,1),Tst);
+}
+function aero(p,W,atm,V,cd0=p.cd0){
+  const q=0.5*atm.rho*V*V, CL=W/(q*p.S), CD=cd0+p.k*CL*CL;
+  return {q,CL,CD,D:q*p.S*CD,LD:CL/CD};
+}
+function takeoff(ac,p,W,atm){
+  const mu=0.02, cd0=p.cd0+0.02;
+  const Vs=Math.sqrt(2*W/(atm.rho*p.S*p.clmaxTO)), VLO=1.2*Vs, V=0.7*VLO, q=0.5*atm.rho*V*V;
+  const CLg=Math.min(Math.PI*p.e*p.AR*mu/2,0.8);
+  const L=q*p.S*CLg, D=q*p.S*(cd0+p.k*CLg*CLg), T=thrustAvail(ac,atm,V);
+  const F=T-D-mu*(W-L); if(F<=0)return {ground:Infinity,todr:Infinity,VLO};
+  const sg=1.44*W*W/(g*atm.rho*p.S*p.clmaxTO*F);
+  const hob=ac.type==='jet'?10.7:15.24, Rr=6.96*Vs*Vs/g, th=Math.acos(1-hob/Rr), sa=Rr*Math.sin(th);
+  return {ground:sg,air:sa,todr:1.15*(sg+sa),VLO,Vs};
+}
+function landing(ac,p,W,atm){
+  const mur=0.4, cd0=p.cd0+0.05;
+  const Vs=Math.sqrt(2*W/(atm.rho*p.S*p.clmaxL)), VTD=1.15*Vs, V=0.7*VTD, q=0.5*atm.rho*V*V;
+  const D=q*p.S*(cd0+p.k*0.01), F=D+mur*W;
+  const sg=1.69*W*W/(g*atm.rho*p.S*p.clmaxL*F);
+  const VF=1.23*Vs, Rf=VF*VF/(0.2*g), th=3*Math.PI/180, hf=Rf*(1-Math.cos(th));
+  const sa=(15.24-hf)/Math.tan(th)+Rf*Math.sin(th);
+  return {ground:sg,air:sa,ldr:(sg+sa)/0.6,Vapp:1.3*Vs,Vs};
+}
+function curves(ac,p,W,atm){
+  const Vs=Math.sqrt(2*W/(atm.rho*p.S*p.clmax));
+  const v0=Math.max(0.85*Vs,8), v1=Math.min(0.93*atm.a,Math.max(ac.Vcr*1.4,Vs*3.5));
+  const out=[];
+  for(let i=0;i<=90;i++){const V=v0+(v1-v0)*i/90, a=aero(p,W,atm,V), Ta=thrustAvail(ac,atm,V);
+    out.push({V,D:a.D,Dp:a.q*p.S*p.cd0,Di:a.D-a.q*p.S*p.cd0,Ta,Pr:a.D*V,Pa:Ta*V,RC:(Ta-a.D)*V/W,CL:a.CL,CD:a.CD});}
+  return {pts:out,Vs};
+}
+
+/* ---------- ESTADO / UI ---------- */
+let metar=null, wbVals={}, charts={};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function fillSelects(){
+  $('apt').innerHTML=Object.entries(AIRPORTS).map(([k,a])=>`<option value="${k}">${k} — ${a.city.split(',')[0]}</option>`).join('');
+  $('acSel').innerHTML=Object.entries(AIRCRAFT).map(([k,a])=>`<option value="${k}">${a.name}</option>`).join('');
+}
+function loadAirport(code){
+  const a=AIRPORTS[code]; $('elev').value=a.elev; $('metarRaw').value=a.metar;
+  decode(); $('metarMsg').className='msg'; $('metarMsg').textContent='METAR de ejemplo cargado. Pega uno real o usa «Obtener METAR en vivo».';
+}
+function decode(){
+  const raw=$('metarRaw').value; if(!raw.trim()){$('metarMsg').className='msg err';$('metarMsg').textContent='Escribe o pega un METAR.';return;}
+  metar=parseMetar(raw);
+  if(metar.temp==null||metar.qnh==null){$('metarMsg').className='msg err';$('metarMsg').textContent='No se encontró temperatura o QNH; se usan valores ISA (15 °C, 1013,25 hPa) donde falten.';}
+  else {$('metarMsg').className='msg ok';$('metarMsg').textContent='METAR decodificado correctamente.';}
+  if(metar.icao&&AIRPORTS[metar.icao]&&$('apt').value!==metar.icao){$('apt').value=metar.icao;$('elev').value=AIRPORTS[metar.icao].elev;}
+  update();
+}
+async function fetchLive(){
+  const icao=$('apt').value; $('metarMsg').className='msg';$('metarMsg').textContent='Consultando aviationweather.gov…';
+  try{
+    const ctl=new AbortController(); setTimeout(()=>ctl.abort(),7000);
+    const r=await fetch(`https://aviationweather.gov/api/data/metar?ids=${icao}&format=raw`,{signal:ctl.signal});
+    const txt=(await r.text()).trim(); if(!r.ok||!txt)throw new Error('vacío');
+    $('metarRaw').value=txt.split('\n')[0]; decode(); $('metarMsg').textContent='METAR en vivo obtenido de aviationweather.gov.';
+  }catch(err){
+    $('metarMsg').className='msg err';
+    $('metarMsg').innerHTML=`No se pudo obtener el METAR en vivo desde esta página. Cópialo de <a style="color:var(--accent)" href="https://aviationweather.gov/data/metar/?ids=${icao}" target="_blank" rel="noopener">aviationweather.gov</a> y pégalo arriba.`;
+  }
+}
+function loadAircraft(code){
+  const ac=AIRCRAFT[code];
+  $('S').value=ac.S; $('V').value=ac.Vcr; $('cd0').value=ac.cd0; $('e').value=ac.e;
+  $('AR').value=(ac.b*ac.b/ac.S).toFixed(2); $('clmax').value=ac.clmax; $('clmaxTO').value=ac.clmaxTO; $('clmaxL').value=ac.clmaxL;
+  const jet=ac.type==='jet';
+  $('pwrLbl').firstChild.textContent=jet?'Empuje por motor [kN]':'Potencia por motor [kW]';
+  $('pwr').value=jet?ac.T0:ac.P0;
+  $('alt').value=ac.FL*100;
+  const wb=buildWB(ac); wbVals={}; wb.stations.forEach(s=>wbVals[s.id]=s.def);
+  $('trip').value=wb.trip; $('sync').checked=true;
+  renderWBTable(ac); update();
+}
+function renderWBTable(ac){
+  const wb=buildWB(ac);
+  $('wbTab').innerHTML=`<tr><th>Estación</th><th>Cantidad</th><th>Máx.</th><th>Brazo [m]</th></tr>`+
+  wb.stations.map(s=>{const unit=s.kind==='pax'||s.kind==='count'?'pers.':'kg';
+    return `<tr><td>${s.name}</td><td><input type="number" id="wb_${s.id}" min="0" max="${s.max}" step="${unit==='kg'?(s.max>2000?100:1):1}" value="${wbVals[s.id]}" aria-label="${s.name}"></td><td>${fmt(s.max)} ${unit}</td><td>${fmt(s.arm,2)}</td></tr>`}).join('');
+  wb.stations.forEach(s=>$('wb_'+s.id).addEventListener('input',e=>{wbVals[s.id]=+e.target.value||0;update();}));
+}
+function params(ac){
+  const S=+$('S').value, AR=+$('AR').value, e=+$('e').value;
+  const p={S,AR,e,cd0:+$('cd0').value,clmax:+$('clmax').value,clmaxTO:+$('clmaxTO').value,clmaxL:+$('clmaxL').value,k:1/(Math.PI*e*AR)};
+  const pw=+$('pwr').value; if(ac.type==='jet')ac.T0=pw; else ac.P0=pw;
+  return p;
+}
+function computeWB(ac){
+  const wb=buildWB(ac), pm=+$('paxMass').value||84;
+  let m=wb.empty.mass, mom=m*wb.empty.arm, fuel=0, fuelArm=0, rows=[];
+  wb.stations.forEach(s=>{const n=Math.min(wbVals[s.id]||0,s.max*1.0001);
+    const kg=s.kind==='pax'?n*pm:s.kind==='count'?n*s.unit:n;
+    if(s.kind==='fuel'){fuel=kg;fuelArm=s.arm;}else{m+=kg;mom+=kg*s.arm;}});
+  const pct=a=>wb.mode==='mac'?(a-wb.lemac)/wb.mac*100:a;
+  const zfw={m,cg:pct(mom/m)};
+  const tm=m+fuel, tmom=mom+fuel*fuelArm, tow={m:tm,cg:pct(tmom/tm)};
+  const trip=Math.min(+$('trip').value||0,fuel), lm=tm-trip, lw={m:lm,cg:pct((tmom-trip*fuelArm)/lm)};
+  const inside=pt=>{const P=wb.env;let c=false;for(let i=0,j=P.length-1;i<P.length;j=i++){const [xi,yi]=P[i],[xj,yj]=P[j];
+    if(((yi>pt.m)!==(yj>pt.m))&&(pt.cg<(xj-xi)*(pt.m-yi)/(yj-yi)+xi))c=!c;}return c;};
+  [zfw,tow,lw].forEach(o=>o.in=inside(o));
+  return {wb,zfw,tow,lw,fuel,trip};
+}
+
+function tile(label,val,unit,cls=''){return `<div class="tile ${cls}"><span class="l">${label}</span><span class="v">${val}</span><span class="u">${unit}</span></div>`;}
+
+function update(){
+  const ac=AIRCRAFT[$('acSel').value], p=params(ac), apt=AIRPORTS[$('apt').value], elev=+$('elev').value||0;
+  const m=metar||parseMetar(apt.metar);
+  const atmA=atmAirport(m,elev);
+  const mode=document.querySelector('input[name=mode]:checked').value;
+  const atm=mode==='apt'?atmA:atmISA(+$('alt').value||0,+$('dT').value||0);
+  const W8=computeWB(ac);
+  if($('sync').checked)$('mass').value=Math.round(W8.tow.m);
+  const mass=+$('mass').value, W=mass*g, V=+$('V').value;
+
+  /* METAR decodificado */
+  const wind=m.wvrb?`VRB / ${m.wspd} kt`:m.wspd===0?'Calma':m.wspd!=null?`${String(m.wdir).padStart(3,'0')}° / ${m.wspd} kt${m.gust?' G'+m.gust:''}`:'—';
+  $('metarDec').innerHTML=`
+   <dt>Estación</dt><dd>${m.icao||'—'}</dd><dt>Observación</dt><dd>${m.time||'—'}</dd>
+   <dt>Viento</dt><dd>${wind}${m.wvar?` (var. ${m.wvar[0]}–${m.wvar[1]}°)`:''}</dd>
+   <dt>Visibilidad</dt><dd>${m.cavok?'CAVOK':m.vis>=10000?'10 km o más':m.vis!=null?fmt(m.vis)+' m':'—'}</dd>
+   <dt>Tiempo presente</dt><dd>${m.wx.length?m.wx.map(decodeWx).join(', '):'Sin fenómenos'}</dd>
+   <dt>Nubes</dt><dd>${m.clouds.length?m.clouds.map(c=>`${COV[c.cov]} ${c.base!=null?fmt(c.base)+' ft':''} ${c.type}`).join('<br>'):(m.cavok||m.nsc)?'Sin nubes significativas':'—'}</dd>
+   <dt>Temperatura</dt><dd>${m.temp!=null?fmt(m.temp,1)+' °C':'—'}</dd>
+   <dt>Punto de rocío</dt><dd>${m.dew!=null?fmt(m.dew,1)+' °C':'—'}</dd>
+   <dt>QNH</dt><dd>${m.qnh!=null?fmt(m.qnh,1)+' hPa':'—'}${m.inhg?` (${m.inhg.toFixed(2)} inHg)`:''}</dd>
+   <dt>Categoría de vuelo</dt><dd><span class="pill c-${m.cat}">${m.cat}</span></dd>`;
+  $('atmDec').innerHTML=`
+   <dt>Presión en la estación</dt><dd>${fmt(atmA.p/100,1)} hPa</dd>
+   <dt>Altitud de presión</dt><dd>${fmt(atmA.PA)} ft</dd>
+   <dt>Altitud de densidad</dt><dd>${fmt(atmA.DA)} ft</dd>
+   <dt>Densidad ρ</dt><dd>${fmt(atmA.rho,4)} kg/m³</dd>
+   <dt>Relación σ = ρ/ρ₀</dt><dd>${fmt(atmA.sigma,3)}</dd>
+   <dt>Humedad relativa</dt><dd>${atmA.RH!=null?fmt(atmA.RH)+' %':'—'}</dd>
+   <dt>Velocidad del sonido</dt><dd>${fmt(atmA.a,1)} m/s</dd>
+   <dt>Techo</dt><dd>${m.ceiling!=null?fmt(m.ceiling)+' ft':'Sin techo'}</dd>`;
+
+  /* Aeronave */
+  $('acInfo').innerHTML=`<dt>Motores</dt><dd>${ac.engine}</dd><dt>MTOW / MLW / MZFW</dt><dd>${fmt(ac.mtow)} / ${fmt(ac.mlw)} / ${fmt(ac.mzfw)} kg</dd>
+   <dt>Masa vacía operativa</dt><dd>${fmt(ac.oew)} kg</dd><dt>Envergadura</dt><dd>${fmt(ac.b,2)} m · carga alar ${fmt(mass/p.S,0)} kg/m²</dd>
+   <dt>Crucero típico</dt><dd>${fmt(ac.Vcr*KT)} KTAS a FL${ac.FL}</dd>`;
+
+  /* Aeropuerto */
+  let best=null;
+  const rrows=[];
+  apt.rwys.forEach(([id,len,w])=>id.split('/').forEach(end=>{
+    const hdg=parseInt(end,10)*10; let hw=null,xw=null;
+    if(m.wdir!=null&&m.wspd!=null){const d=(m.wdir-hdg)*Math.PI/180;hw=m.wspd*Math.cos(d);xw=m.wspd*Math.sin(d);}
+    const r={end,hdg,len,w,hw,xw}; rrows.push(r); if(hw!=null&&(!best||hw>best.hw))best=r;}));
+  $('aptInfo').innerHTML=`<dt>Nombre</dt><dd>${apt.name}</dd><dt>Ciudad</dt><dd>${apt.city}</dd>
+   <dt>Elevación</dt><dd>${fmt(elev)} m · ${fmt(elev*FT)} ft</dd><dt>Pista recomendada por viento</dt><dd>${best?best.end:'— (viento calma o variable)'}</dd>`;
+  $('rwyTab').innerHTML=`<tr><th>Pista</th><th>Rumbo</th><th>Longitud</th><th>Ancho</th><th>Frente/cola</th><th>Cruzado</th></tr>`+
+   rrows.map(r=>`<tr><td class="${best&&r===best?'best':''}">${r.end}</td><td>${String(r.hdg).padStart(3,'0')}°</td><td>${fmt(r.len)} m</td><td>${r.w} m</td>
+    <td>${r.hw==null?'—':(r.hw>=0?'▲ ':'▼ ')+fmt(Math.abs(r.hw),1)+' kt'}</td><td>${r.xw==null?'—':fmt(Math.abs(r.xw),1)+' kt '+(r.xw>0?'der.':'izq.')}</td></tr>`).join('');
+  const rwyMax=Math.max(...apt.rwys.map(r=>r[1]));
+
+  /* Resultados */
+  const a=aero(p,W,atm,V), Ta=thrustAvail(ac,atm,V), Vs=Math.sqrt(2*W/(atm.rho*p.S*p.clmax));
+  const LDmax=1/(2*Math.sqrt(p.cd0*p.k)), Vmd=Math.sqrt(2*W/(atm.rho*p.S))*Math.pow(p.k/p.cd0,0.25);
+  const RC=(Ta-a.D)*V/W*196.85;
+  const cv=curves(ac,p,W,atm), best_rc=cv.pts.reduce((b,x)=>x.RC>b.RC?x:b,cv.pts[0]);
+  const to=takeoff(ac,p,Math.min(W,ac.mtow*g*1.2),atmA), ld=landing(ac,p,Math.min(W,ac.mlw*g),atmA);
+  // Breguet en crucero ISA
+  const atmC=atmISA(ac.FL*100,0), Wi=W, Wf=W-0.9*W8.fuel*g, Wm=(Wi+Wf)/2, aC=aero(p,Wm,atmC,ac.Vcr);
+  let rng=NaN; if(W8.fuel>0&&Wf>0){
+    rng=ac.type==='jet'?(ac.Vcr/(ac.tsfc/3600))*aC.LD*Math.log(Wi/Wf):(ac.eta/(ac.psfc/3.6e6*g))*aC.LD*Math.log(Wi/Wf);}
+  $('resCond').textContent=(mode==='apt'?`Condiciones de ${apt.city.split(',')[0]} (${$('apt').value})`:`ISA ${fmt(+$('alt').value)} ft, ΔISA ${$('dT').value} °C`)+` · m = ${fmt(mass)} kg · V = ${fmt(V)} m/s (${fmt(V*KT)} KTAS)`;
+  $('tiles').innerHTML=[
+    tile('Densidad del aire',fmt(atm.rho,3),'kg/m³'),
+    tile('Altitud de densidad',fmt(atm.DA),'ft'),
+    tile('CL',fmt(a.CL,3),'Coef. sustentación',a.CL>p.clmax?'bad':''),
+    tile('CD',fmt(a.CD,4),'Coef. resistencia'),
+    tile('L/D',fmt(a.LD,1),`máx. ${fmt(LDmax,1)} a ${fmt(Vmd)} m/s`),
+    tile('Empuje requerido',fmt(a.D/1000,1),'kN (= resistencia)',a.D>Ta?'bad':''),
+    tile('Empuje disponible',fmt(Ta/1000,1),'kN'),
+    tile('Vs limpia',fmt(Vs*KT),`KTAS · ${fmt(Vs*Math.sqrt(atm.sigma)*KT)} KEAS`,V<Vs?'bad':''),
+    tile('Número de Mach',fmt(V/atm.a,3),`a = ${fmt(atm.a,1)} m/s`,V/atm.a>0.89?'warn':''),
+    tile('Régimen de ascenso',fmt(RC),`ft/min · máx. ${fmt(best_rc.RC*196.85)} a ${fmt(best_rc.V)} m/s`,RC<0?'bad':''),
+    tile('TODR estimado',fmt(to.todr),`m · pista ${fmt(rwyMax)} m`,to.todr>rwyMax?'bad':to.todr>0.85*rwyMax?'warn':'good'),
+    tile('LDR estimado',fmt(ld.ldr),`m · Vapp ${fmt(ld.Vapp*KT)} KTAS`,ld.ldr>rwyMax?'bad':'good'),
+    tile('Alcance Breguet',fmt(rng/1000),`km · FL${ac.FL}, L/D ${fmt(aC.LD,1)}`)
+  ].join('');
+
+  /* Alertas */
+  const al=[];
+  if(V<Vs)al.push(['b',`V = ${fmt(V)} m/s es menor que la velocidad de pérdida limpia (${fmt(Vs)} m/s).`]);
+  if(a.D>Ta)al.push(['b','El empuje requerido supera al disponible: no es posible vuelo nivelado a esta velocidad.']);
+  if(V/atm.a>0.89)al.push(['w',`Mach ${fmt(V/atm.a,2)}: fuera del rango de validez de la polar parabólica (resistencia de onda no modelada).`]);
+  if(mass>ac.mtow)al.push(['b',`Masa de ${fmt(mass)} kg excede el MTOW (${fmt(ac.mtow)} kg).`]);
+  if(W8.zfw.m>ac.mzfw)al.push(['b',`ZFW ${fmt(W8.zfw.m)} kg excede el MZFW (${fmt(ac.mzfw)} kg).`]);
+  if(W8.lw.m>ac.mlw)al.push(['w',`Peso de aterrizaje ${fmt(W8.lw.m)} kg excede el MLW (${fmt(ac.mlw)} kg).`]);
+  ['zfw','tow','lw'].forEach(k=>{if(!W8[k].in)al.push(['b',`CG ${k.toUpperCase()} fuera de la envolvente de peso y balance.`]);});
+  if(to.todr>rwyMax)al.push(['b',`TODR (${fmt(to.todr)} m) mayor que la pista más larga (${fmt(rwyMax)} m).`]);
+  if(best&&rrows.some(r=>r===best&&Math.abs(r.xw)>20))al.push(['w','Viento cruzado superior a 20 kt en la pista recomendada.']);
+  if(atmA.DA>8000)al.push(['w',`Altitud de densidad alta (${fmt(atmA.DA)} ft): menor empuje y mayor TAS de despegue.`]);
+  if(!al.length)al.push(['',`Todos los parámetros dentro de límites. Pista sugerida: ${best?best.end:'—'}.`]);
+  $('alerts').innerHTML=al.map(([c,t])=>`<li class="${c}">${t}</li>`).join('');
+  const bad=al.some(x=>x[0]==='b');
+  $('status').className='status '+(bad?'warn':'ok');
+  $('statusTxt').textContent=bad?'Análisis con advertencias':'Análisis completado';
+
+  /* W&B tabla resultados */
+  const mac=W8.wb.mode==='mac', cgU=mac?'% MAC':'m';
+  $('wbSub').textContent=mac?`LEMAC ${fmt(W8.wb.lemac,2)} m · MAC ${fmt(W8.wb.mac,2)} m · datum en la nariz`:'Datum en el cortafuegos (POH)';
+  $('wbRes').innerHTML=`<tr><th>Condición</th><th>Masa [kg]</th><th>Límite [kg]</th><th>CG [${cgU}]</th><th>Estado</th></tr>`+
+   [['ZFW',W8.zfw,ac.mzfw],['TOW',W8.tow,ac.mtow],['LW',W8.lw,ac.mlw]].map(([n,o,lim])=>{const ok=o.in&&o.m<=lim;
+    return `<tr><td>${n}</td><td>${fmt(o.m)}</td><td>${fmt(lim)}</td><td>${fmt(o.cg,mac?1:3)}</td><td style="color:var(${ok?'--ok':'--bad'})">${ok?'Dentro':'Fuera'}</td></tr>`}).join('')+
+   `<tr><td>Combustible</td><td>${fmt(W8.fuel)}</td><td>${fmt(ac.fuelMax)}</td><td colspan="2">${fmt(W8.fuel/ac.dens)} L</td></tr>`;
+  $('wbNote').textContent=mac?'Envolvente simplificada con fines académicos (límites típicos 14–39 % MAC). Para operación real use el manual de carga del fabricante.':'Envolvente de categoría normal según el POH del Cessna 172S.';
+
+  drawCharts(ac,p,W,atm,atmA,V,Vs,Vmd,cv,W8,rwyMax);
+}
+
+/* ---------- GRÁFICAS ---------- */
+function mk(id,xt,yt){
+  return new Chart($(id),{type:'scatter',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,
+    interaction:{mode:'nearest',intersect:false},
+    plugins:{legend:{labels:{usePointStyle:true,boxWidth:8,color:css('--muted'),font:{family:'Barlow',size:12}}},
+      tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.parsed.y,1)} @ ${fmt(c.parsed.x,1)}`}}},
+    scales:{x:{type:'linear',title:{display:true,text:xt,color:css('--muted')},grid:{color:css('--line-soft')},ticks:{color:css('--muted')}},
+            y:{title:{display:true,text:yt,color:css('--muted')},grid:{color:css('--line-soft')},ticks:{color:css('--muted')}}}}});
+}
+const line=(label,data,color,extra={})=>({label,data,showLine:true,pointRadius:0,borderColor:color,backgroundColor:color,borderWidth:2,...extra});
+const mark=(label,pt,color)=>({label,data:[pt],pointRadius:6,pointStyle:'circle',borderColor:color,backgroundColor:color,showLine:false});
+const vline=(label,x,y0,y1,color)=>line(label,[{x,y:y0},{x,y:y1}],color,{borderDash:[5,4],borderWidth:1.2});
+function set(ch,ds){ch.data.datasets=ds;ch.update();}
+
+function drawCharts(ac,p,W,atm,atmA,V,Vs,Vmd,cv,W8,rwyMax){
+  const C={a:css('--accent'),w:css('--warn'),o:css('--ok'),v:css('--violet'),m:css('--muted'),b:css('--bad')};
+  const P=cv.pts, kN=x=>x/1000;
+  const Dmax=Math.max(...P.map(x=>kN(Math.max(x.D,x.Ta))));
+  set(charts.T,[line('Empuje requerido (D)',P.map(x=>({x:x.V,y:kN(x.D)})),C.a),
+    line('Parásita',P.map(x=>({x:x.V,y:kN(x.Dp)})),C.m,{borderDash:[2,3],borderWidth:1}),
+    line('Inducida',P.map(x=>({x:x.V,y:kN(x.Di)})),C.v,{borderDash:[2,3],borderWidth:1}),
+    line('Empuje disponible',P.map(x=>({x:x.V,y:kN(x.Ta)})),C.w),
+    vline('Vs',Vs,0,Dmax,C.b),vline('V(L/D)máx',Vmd,0,Dmax,C.o),
+    mark('Punto actual',{x:V,y:kN(aero(p,W,atm,V).D)},'#ffffff')]);
+  const Pmax=Math.max(...P.map(x=>Math.max(x.Pr,x.Pa)/1000));
+  const Vmp=Math.sqrt(2*W/(atm.rho*p.S))*Math.pow(p.k/(3*p.cd0),0.25);
+  set(charts.P,[line('Potencia requerida',P.map(x=>({x:x.V,y:x.Pr/1000})),C.a),
+    line('Potencia disponible',P.map(x=>({x:x.V,y:x.Pa/1000})),C.w),
+    vline('V potencia mín.',Vmp,0,Pmax,C.o),vline('Vs',Vs,0,Pmax,C.b)]);
+  const rc=P.map(x=>({x:x.V,y:x.RC*196.85})), rcb=rc.reduce((b,x)=>x.y>b.y?x:b,rc[0]);
+  set(charts.R,[line('Régimen de ascenso',rc,C.o,{fill:{target:{value:0},above:'rgba(70,212,139,.10)',below:'rgba(255,107,122,.10)'}}),
+    mark(`Vy ≈ ${fmt(rcb.x)} m/s`,rcb,C.w),vline('Vs',Vs,Math.min(0,...rc.map(x=>x.y)),rcb.y,C.b)]);
+  const pol=[];for(let cl=-0.3;cl<=p.clmax+0.001;cl+=0.05)pol.push({x:p.cd0+p.k*cl*cl,y:cl});
+  const ldm=1/(2*Math.sqrt(p.cd0*p.k)), clmd=Math.sqrt(p.cd0/p.k);
+  const a0=aero(p,W,atm,V);
+  set(charts.Pol,[line('Polar CD = CD₀ + k·CL²',pol,C.a),
+    line(`Tangente (L/D)máx = ${fmt(ldm,1)}`,[{x:0,y:0},{x:2*p.cd0*1.6,y:ldm*2*p.cd0*1.6}],C.m,{borderDash:[5,4],borderWidth:1}),
+    mark('(L/D)máx',{x:2*p.cd0,y:clmd},C.o),mark('Punto actual',{x:a0.CD,y:a0.CL},'#ffffff')]);
+  charts.Pol.options.scales.x.title.text='CD'; charts.Pol.options.scales.y.title.text='CL'; charts.Pol.update();
+
+  // vs peso
+  const ms=[],tod=[],ldr=[],vsc=[];
+  const lo=ac.oew+0.15*(ac.mtow-ac.oew);
+  for(let i=0;i<=24;i++){const mm=lo+(ac.mtow-lo)*i/24, Wm=mm*g;
+    const t=takeoff(ac,p,Wm,atmA), l=landing(ac,p,Wm,atmA);
+    tod.push({x:mm,y:t.todr});ldr.push({x:mm,y:l.ldr});
+    vsc.push({x:mm,y:Math.sqrt(2*Wm/(1.225*p.S*p.clmax))*KT});}
+  const tw=W8.tow.m;
+  set(charts.TO,[line('TODR',tod,C.a),line('LDR',ldr,C.v),
+    line(`Pista disponible ${fmt(rwyMax)} m`,[{x:lo,y:rwyMax},{x:ac.mtow,y:rwyMax}],C.b,{borderDash:[6,4],borderWidth:1.5}),
+    vline('TOW actual',tw,0,Math.max(rwyMax,...tod.map(x=>x.y))*1.05,C.w)]);
+  charts.TO.options.scales.x.max=ac.mtow; charts.TO.options.scales.x.min=Math.floor(lo); charts.TO.update();
+  const vs2=vsc.map(x=>({x:x.x,y:Math.sqrt(2*x.x*g/(1.225*p.S*p.clmaxTO))*KT})), vs3=vsc.map(x=>({x:x.x,y:Math.sqrt(2*x.x*g/(1.225*p.S*p.clmaxL))*KT}));
+  set(charts.Vs,[line('Limpio',vsc,C.a),line('Despegue',vs2,C.w),line('Aterrizaje',vs3,C.o)]);
+  charts.Vs.options.scales.x.max=ac.mtow; charts.Vs.options.scales.x.min=Math.floor(lo); charts.Vs.update();
+
+  // W&B
+  const env=W8.wb.env.map(([x,y])=>({x,y})); env.push(env[0]);
+  const mac=W8.wb.mode==='mac';
+  const xr=[Math.min(...env.map(e=>e.x)),Math.max(...env.map(e=>e.x))];
+  set(charts.WB,[line('Envolvente',env,C.a,{fill:true,backgroundColor:'rgba(92,200,242,.08)'}),
+    line('MZFW',[{x:xr[0],y:ac.mzfw},{x:xr[1],y:ac.mzfw}],C.m,{borderDash:[4,4],borderWidth:1}),
+    line('MLW',[{x:xr[0],y:ac.mlw},{x:xr[1],y:ac.mlw}],C.v,{borderDash:[4,4],borderWidth:1}),
+    line('Trayectoria de carga',[{x:W8.zfw.cg,y:W8.zfw.m},{x:W8.tow.cg,y:W8.tow.m},{x:W8.lw.cg,y:W8.lw.m}],C.m,{borderWidth:1}),
+    mark('ZFW',{x:W8.zfw.cg,y:W8.zfw.m},W8.zfw.in?C.o:C.b),
+    mark('TOW',{x:W8.tow.cg,y:W8.tow.m},W8.tow.in?C.w:C.b),
+    mark('LW',{x:W8.lw.cg,y:W8.lw.m},W8.lw.in?C.v:C.b)]);
+  charts.WB.options.scales.x.title.text=mac?'Centro de gravedad [% MAC]':'Centro de gravedad [m desde el datum]';
+  charts.WB.update();
+}
+
+/* ---------- INICIO ---------- */
+function init(){
+  fillSelects();
+  Chart.defaults.font.family="'JetBrains Mono', monospace"; Chart.defaults.font.size=11;
+  charts.T=mk('chT','V verdadera [m/s]','Fuerza [kN]');
+  charts.P=mk('chP','V verdadera [m/s]','Potencia [kW]');
+  charts.R=mk('chR','V verdadera [m/s]','RC [ft/min]');
+  charts.Pol=mk('chPol','CD','CL');
+  charts.TO=mk('chTO','Masa [kg]','Distancia [m]');
+  charts.Vs=mk('chVs','Masa [kg]','Vs [KEAS]');
+  charts.WB=mk('chWB','CG','Masa [kg]');
+  $('apt').value='SKBO'; $('acSel').value='E295';
+  const a=AIRPORTS.SKBO; $('elev').value=a.elev; $('metarRaw').value=a.metar; metar=parseMetar(a.metar);
+  $('metarMsg').textContent='METAR de ejemplo cargado. Pega uno real o usa «Obtener METAR en vivo».';
+  loadAircraft('E295');
+  $('apt').addEventListener('change',e=>loadAirport(e.target.value));
+  $('acSel').addEventListener('change',e=>loadAircraft(e.target.value));
+  $('btnDecode').addEventListener('click',decode);
+  $('btnSample').addEventListener('click',()=>loadAirport($('apt').value));
+  $('btnLive').addEventListener('click',fetchLive);
+  ['S','V','cd0','e','AR','clmax','clmaxTO','clmaxL','pwr','elev','alt','dT','paxMass','trip'].forEach(id=>$(id).addEventListener('input',update));
+  $('mass').addEventListener('input',()=>{$('sync').checked=false;update();});
+  $('sync').addEventListener('change',update);
+  document.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener('change',update));
+  const setV=f=>{const ac=AIRCRAFT[$('acSel').value],p=params(ac),W=+$('mass').value*g;
+    const mode=document.querySelector('input[name=mode]:checked').value, apt=AIRPORTS[$('apt').value];
+    const atm=mode==='apt'?atmAirport(metar||parseMetar(apt.metar),+$('elev').value):atmISA(+$('alt').value,+$('dT').value);
+    $('V').value=Math.round(f(ac,p,W,atm));update();};
+  $('btnVmd').addEventListener('click',()=>setV((ac,p,W,atm)=>Math.sqrt(2*W/(atm.rho*p.S))*Math.pow(p.k/p.cd0,0.25)));
+  $('btnVcr').addEventListener('click',()=>setV(ac=>ac.Vcr));
+  $('btnVto').addEventListener('click',()=>setV((ac,p,W,atm)=>1.3*Math.sqrt(2*W/(atm.rho*p.S*p.clmax))));
+}
+if(window.Chart)init(); else window.addEventListener('load',init);
+</script>
+
+</html>
