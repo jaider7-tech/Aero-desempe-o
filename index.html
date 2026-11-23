@@ -21,6 +21,7 @@
   --font-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
@@ -947,9 +948,10 @@ function init(){
   const a=AIRPORTS.SKBO; $('elev').value=a.elev; $('metarRaw').value=a.metar; fillRunways(); metar=parseMetar(a.metar);
   $('metarMsg').textContent='METAR de ejemplo cargado. Pega uno real o usa «Obtener METAR en vivo».';
   loadAircraft('E295');
-  document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{location.hash=b.dataset.tab;showTab(b.dataset.tab);}));
+  document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{showTab(b.dataset.tab);try{history.replaceState(null,'','#'+b.dataset.tab);}catch(e){}window.scrollTo({top:0});}));
   window.addEventListener('hashchange',()=>showTab(location.hash.slice(1)));
-  showTab(location.hash.slice(1));
+  let h='';try{h=location.hash.slice(1);}catch(e){}
+  showTab(h);
   $('apt').addEventListener('change',e=>loadAirport(e.target.value));
   $('acSel').addEventListener('change',e=>loadAircraft(e.target.value));
   $('btnDecode').addEventListener('click',decode);
